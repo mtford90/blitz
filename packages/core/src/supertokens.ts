@@ -1,4 +1,5 @@
 import {useState} from "react"
+import {suspend} from "suspense"
 import {COOKIE_CSRF_TOKEN} from "./constants"
 import {publicDataStore} from "./public-data-store"
 import {PublicData} from "./types"
@@ -33,8 +34,11 @@ export interface SessionContextBase {
   roles: string[]
   handle: string | null
   publicData: unknown
+
   authorize(input?: any): asserts this is AuthenticatedSessionContext
+
   isAuthorized(input?: any): boolean
+
   // authorize: (roleOrRoles?: string | string[]) => void
   // isAuthorized: (roleOrRoles?: string | string[]) => boolean
   create: (publicData: PublicData, privateData?: Record<any, any>) => Promise<void>
@@ -62,9 +66,32 @@ export interface PublicDataWithLoading extends PublicData {
   isLoading: boolean
 }
 
-export const useSession: () => PublicDataWithLoading = () => {
-  const [publicData, setPublicData] = useState(publicDataStore.emptyPublicData)
-  const [isLoading, setIsLoading] = useState(true)
+// Workaround for https://github.com/blitz-js/blitz/issues/1752
+const waitForPublicData = suspend(
+  (() =>
+    new Promise<PublicData>((resolve) => {
+      if (publicDataStore.lastState) {
+        resolve(publicDataStore.lastState)
+      } else {
+        const subscription = publicDataStore.observable.subscribe((data) => {
+          resolve(data)
+          subscription.unsubscribe()
+        })
+      }
+    }))(),
+)
+
+export const useSession: () => PublicDataWithLoading = ({
+  suspense = true,
+}: {suspense?: boolean} = {}) => {
+  let initialPublicData = publicDataStore.emptyPublicData
+
+  if (suspense) {
+    initialPublicData = publicDataStore.lastState || waitForPublicData()
+  }
+
+  const [publicData, setPublicData] = useState(initialPublicData)
+  const [isLoading, setIsLoading] = useState(!suspense)
 
   useIsomorphicLayoutEffect(() => {
     // Initialize on mount

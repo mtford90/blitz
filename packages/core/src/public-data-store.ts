@@ -8,6 +8,7 @@ class PublicDataStore {
   private eventKey = `${LOCALSTORAGE_PREFIX}publicDataUpdated`
   readonly emptyPublicData: PublicData = {userId: null, roles: []}
   readonly observable = BadBehavior<PublicData>()
+  lastState: PublicData | undefined
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -29,12 +30,16 @@ class PublicDataStore {
       // Prevent infinite loop
       localStorage.setItem(this.eventKey, Date.now().toString())
     }
-    this.observable.next(value ?? this.getData())
+    let nextValue = value ?? this.getData()
+
+    this.lastState = nextValue
+    this.observable.next(nextValue)
   }
 
   clear() {
     deleteCookie(COOKIE_PUBLIC_DATA_TOKEN)
     this.updateState(this.emptyPublicData)
+    this.lastState = undefined
   }
 
   getData() {

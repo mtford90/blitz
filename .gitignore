@@ -25,3 +25,4 @@ dist
 .nvmrc
 **/.test*
 examples/auth2
+.idea
